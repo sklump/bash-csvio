@@ -1,0 +1,92 @@
+#!/bin/bash
+
+# Library for CSV input/output.
+
+declare -a CELLS
+
+#
+# Populate (global) ${CELLS[@]} with input content array
+#
+parse_line() {
+    local LINE="${1}"
+    LINE=$(echo ${LINE} | tr -d '\r')
+    local DELIM="${2:-,}"
+    DELIM="${DELIM:0:1}"
+
+    local CURVAL=""
+    local INQUOTES=0
+    local STARTED=0
+    for (( I=0; I<${#LINE}; I++ ))
+    do
+        local CH="${LINE:$I:1}"
+        if [ "${INQUOTES}" -eq "1" ]
+        then
+            STARTED=1
+            if [ "${CH}" == "\"" ]
+            then
+                INQUOTES=0
+            else
+                CURVAL="${CURVAL}${CH}"
+            fi
+        else
+            case "${CH}" in
+            "\"")
+                INQUOTES=1
+                if [ "${STARTED}" -eq "1" ]
+                then
+                    CURVAL="${CURVAL}\""
+                fi
+                ;;
+            "${DELIM}")
+                CELLS[${#CELLS[@]}]="${CURVAL}"
+                CURVAL=""
+                STARTED=0
+                ;;
+            "\n")
+                break
+                ;;
+            *)
+                CURVAL="${CURVAL}${CH}"
+            esac
+        fi
+    done
+    CELLS[${#CELLS[@]}]="${CURVAL}"
+}
+
+#
+# Use input delimiter to write input array as a .csv record
+#
+write_line() {
+    local DELIM="${1:0:1}"
+    shift
+
+    # declare -a WRITE_CELLS
+    WRITE_CELLS=("$@")
+    FIRST_CELL=1
+
+    for CELL in "${WRITE_CELLS[@]}"
+    do
+        if [ "${FIRST_CELL}" -eq "0" ]
+        then
+            printf -- "${DELIM}"
+        fi
+
+        local QUOTE=""
+        case "${CELL}" in
+        *${DELIM}*)
+            QUOTE="\""
+            ;;
+        *\"*)
+            QUOTE="\""
+            ;;
+        *)
+            ;;
+        esac
+
+        CELL=$(echo ${CELL} | sed -e 's/\"/\"\"/g')
+        printf -- "%s%s%s" "${QUOTE}" "${CELL}" "${QUOTE}"
+
+        FIRST_CELL=0
+    done
+    printf "\n"
+}
